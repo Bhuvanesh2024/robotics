@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D & 2D 4-DOF Robot Arm Kinematics Visualizer (FK & IK)</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22%2338bdf8%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%230f172a%22/></svg>">
+</head>
+<body>
+
+    <!-- Header Navigation Bar -->
+    <header class="app-header">
+        <div class="brand-section">
+            <div class="brand-logo">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                </svg>
+            </div>
+            <div>
+                <div class="brand-title">
+                    RoboKinematics
+                    <span class="badge" id="viewModeBadge">3D Robotics Lab</span>
+                </div>
+                <div class="brand-subtitle">Interactive 3D & 2D Forward and Inverse Kinematics</div>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <!-- 2D / 3D Mode Toggle -->
+            <div class="view-mode-toggle">
+                <button class="btn-view-mode" id="btnMode2D" data-view="2d" title="Switch to 2D Planar Mode">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                    2D Planar
+                </button>
+                <button class="btn-view-mode active" id="btnMode3D" data-view="3d" title="Switch to 3D Robotics Lab">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                    3D Lab
+                </button>
+            </div>
+
+            <!-- DOF Configuration -->
+            <div class="dof-control-group">
+                <label for="dofSelect">Arm DOF:</label>
+                <select id="dofSelect">
+                    <option value="2">2-DOF</option>
+                    <option value="3">3-DOF</option>
+                    <option value="4" selected>4-DOF (Current)</option>
+                    <option value="5">5-DOF</option>
+                    <option value="6">6-DOF</option>
+                </select>
+            </div>
+
+            <!-- Theme Palette Selector -->
+            <div class="theme-control-group">
+                <label for="themeSelect">🎨 Theme:</label>
+                <select id="themeSelect">
+                    <option value="industrial" selected>🟠 Industrial Orange (KUKA)</option>
+                    <option value="cyber">🔵 Cyber Blue (Electric)</option>
+                    <option value="emerald">🟢 Emerald Neon (Matrix)</option>
+                    <option value="purple">🟣 Deep Violet (Synthwave)</option>
+                    <option value="gold">🟡 Titanium Gold (Dark)</option>
+                    <option value="light">⚪ Studio Light (Clean)</option>
+                </select>
+            </div>
+
+            <!-- Quick Poses -->
+            <div class="preset-poses-group">
+                <button class="btn-pose" data-pose="home" title="Default home pose">Home</button>
+                <button class="btn-pose" data-pose="zero" title="All angles 0°">Straight (0°)</button>
+                <button class="btn-pose" data-pose="upright" title="Pointing vertically">Upright</button>
+                <button class="btn-pose" data-pose="folded" title="Compact folded pose">Folded</button>
+                <button class="btn-pose" data-pose="reach" title="Reaching horizontal forward">Reach</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="app-container">
+        
+        <!-- Left: Interactive Canvas & 3D Viewport -->
+        <section class="canvas-wrapper">
+            <!-- 2D Canvas -->
+            <canvas id="robotCanvas" class="hidden"></canvas>
+
+            <!-- 3D Three.js Container -->
+            <div id="robot3DContainer" class="active"></div>
+
+            <!-- Floating HUD: Top Left Telemetry -->
+            <div class="hud-card hud-top-left">
+                <div class="hud-telemetry-grid">
+                    <span class="hud-label">End-Effector:</span>
+                    <span class="hud-value" id="telemetryEEPos" style="color: #ef4444;">(0.00, 0.00, 0.00)</span>
+
+                    <span class="hud-label">Orientation (φ):</span>
+                    <span class="hud-value" id="telemetryEEPhi" style="color: #38bdf8;">0.0°</span>
+
+                    <span class="hud-label">Max Reach:</span>
+                    <span class="hud-value" id="telemetryMaxReach" style="color: #10b981;">14.00 m</span>
+
+                    <span class="hud-label">Manipulability w:</span>
+                    <span class="hud-value" id="telemetryManipulability" style="color: #f59e0b;">0.000</span>
+                </div>
+                <div id="reachabilityStatus" class="status-pill reachable">Reachable / In Workspace</div>
+            </div>
+
+            <!-- Floating HUD: Top Right Toolbar -->
+            <div class="hud-card hud-top-right">
+                <!-- 3D Camera Controls -->
+                <div class="camera-preset-bar" id="cameraPresetBar">
+                    <span style="font-size: 0.72rem; color: var(--text-muted); align-self: center; margin-right: 2px;">Cam:</span>
+                    <button class="btn-cam" data-cam="iso" title="Isometric Perspective">Iso</button>
+                    <button class="btn-cam" data-cam="front" title="Front View">Front</button>
+                    <button class="btn-cam" data-cam="side" title="Side View">Side</button>
+                    <button class="btn-cam" data-cam="top" title="Top View">Top</button>
+                    <button class="btn-cam" data-cam="ee" title="Focus on Gripper">Tool</button>
+                </div>
+
+                <div class="hud-toolbar">
+                    <button class="hud-btn" id="btnFitScreen" title="Reset View">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                    </button>
+                    <button class="hud-btn" id="btnResetOrigin" title="Center Origin">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg>
+                    </button>
+                    <button class="hud-btn" id="btnClearTrail" title="Clear Motion Trail">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    </button>
+                </div>
+
+                <div class="hud-toggles">
+                    <label class="toggle-label" id="lblToggleGrid">
+                        <input type="checkbox" id="toggleGrid" checked> Show Ground Grid
+                    </label>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="toggleWorkspace" checked> Show Reach Sphere
+                    </label>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="toggleTrail" checked> 3D Motion Trail
+                    </label>
+                    <label class="toggle-label" id="lblToggleGizmo">
+                        <input type="checkbox" id="toggleGizmo" checked> 3D Transform Gizmo
+                    </label>
+                    <label class="toggle-label" id="lblToggleLabels">
+                        <input type="checkbox" id="toggleLabels" checked> Coordinates Text
+                    </label>
+                </div>
+            </div>
+
+            <!-- Floating HUD: Bottom Tip -->
+            <div class="hud-card hud-bottom-left">
+                <svg class="tip-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <span id="bottomTipText"><strong>3D Controls:</strong> Grab the <strong>3D Gizmo arrows</strong> to solve IK in 3D! Left-drag background to orbit, right-drag to pan, wheel to zoom.</span>
+            </div>
+        </section>
+
+        <!-- Right: Control Sidebar -->
+        <aside class="control-sidebar">
+            
+            <!-- Mode Tabs Header -->
+            <nav class="mode-nav">
+                <button class="mode-tab active" data-mode="fk">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12M18 9v12M6 15l6-3 6 3"/></svg>
+                    Forward (FK)
+                </button>
+                <button class="mode-tab" data-mode="ik">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24m5.66 5.66 4.24 4.24"/></svg>
+                    Inverse (IK)
+                </button>
+                <button class="mode-tab" data-mode="trajectory">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    Trajectory
+                </button>
+                <button class="mode-tab" data-mode="math">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10M6 14h6"/></svg>
+                    Math & J
+                </button>
+                <button class="mode-tab" data-mode="code">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    Python Code
+                </button>
+            </nav>
+
+            <!-- Tab Content Container -->
+            <div class="tab-content-scroll">
+
+                <!-- 1. FORWARD KINEMATICS (FK) PANEL -->
+                <div class="mode-panel" id="panel-fk">
+                    <div class="section-title">
+                        <span>Joint Angles & Link Dimensions</span>
+                        <label class="toggle-label" style="text-transform: none; font-weight: normal;">
+                            <input type="checkbox" id="chkLimits"> Joint Limits (&plusmn;175&deg;)
+                        </label>
+                    </div>
+
+                    <!-- Gripper Slider -->
+                    <div class="joint-control-card" style="border-left: 4px solid #f87171;">
+                        <div class="card-header">
+                            <div class="joint-title">
+                                <span class="color-dot" style="background:#f87171"></span>
+                                <strong>End-Effector Gripper</strong>
+                            </div>
+                            <span class="angle-badge" id="gripperValBadge">80% Open</span>
+                        </div>
+                        <div class="slider-row">
+                            <label>Grip Width</label>
+                            <input type="range" id="gripperSlider" min="0" max="1" step="0.05" value="0.8">
+                            <div class="input-with-unit">
+                                <span id="gripperStatusText" style="font-size:0.75rem; color:var(--text-primary);">Open</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Sliders Container for Links & Angles -->
+                    <div id="jointSlidersContainer" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+
+                    <!-- Quick Joint Coordinates Table -->
+                    <div class="section-title" style="margin-top: 0.5rem;">
+                        <span>Current Joint Coordinates</span>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Point / Joint</th>
+                                <th>X</th>
+                                <th>Y</th>
+                                <th id="thZ">Z</th>
+                            </tr>
+                        </thead>
+                        <tbody id="coordsTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 2. INVERSE KINEMATICS (IK) PANEL -->
+                <div class="mode-panel hidden" id="panel-ik">
+                    <div class="section-title">
+                        <span>Inverse Kinematics Solver</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">IK Algorithm:</label>
+                        <select class="form-select" id="ikSolverSelect">
+                            <option value="fabrik" selected>FABRIK (Forward & Backward Reaching - Fast & Smooth)</option>
+                            <option value="ccd">CCD (Cyclic Coordinate Descent - Classic Robotics)</option>
+                            <option value="jacobian">Jacobian DLS (Damped Least Squares - Differential)</option>
+                        </select>
+                    </div>
+
+                    <div class="section-title" style="margin-top: 0.5rem;">
+                        <span>Target Coordinates</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
+                        <div class="form-group">
+                            <label class="form-label">Target X</label>
+                            <input type="number" class="form-input mono" id="inputTargetX" step="0.2" value="6.0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Target Y (Up)</label>
+                            <input type="number" class="form-input mono" id="inputTargetY" step="0.2" value="4.0">
+                        </div>
+                        <div class="form-group" id="groupTargetZ">
+                            <label class="form-label">Target Z</label>
+                            <input type="number" class="form-input mono" id="inputTargetZ" step="0.2" value="3.0">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 0.25rem;">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="chkConstrainPhi"> Constrain End-Effector Tool Angle (&phi;)
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.4rem;">
+                            <input type="number" class="form-input mono" id="inputTargetPhi" step="5" value="0" disabled style="width: 100%;">
+                            <span style="font-size: 0.85rem; color: var(--text-muted);">&deg;</span>
+                        </div>
+                    </div>
+
+                    <button class="btn-primary" id="btnSolveIK" style="margin-top: 0.5rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                        Compute IK Solution
+                    </button>
+
+                    <div class="math-card" style="margin-top: 0.5rem;">
+                        <strong>Interactive 3D Gizmo:</strong> You can drag the <strong>red (X), green (Y), and blue (Z)</strong> arrows directly in the 3D viewport to control the robot arm in full 3D space!
+                    </div>
+                </div>
+
+                <!-- 3. TRAJECTORY TRACKING PANEL -->
+                <div class="mode-panel hidden" id="panel-trajectory">
+                    <div class="section-title">
+                        <span>Autonomous Path Tracking</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Trajectory Shape:</label>
+                        <select class="form-select" id="trajectoryShape">
+                            <option value="circle">3D Circle</option>
+                            <option value="helix">3D Helix / Spiral</option>
+                            <option value="lemniscate">3D Figure-8 / Infinity</option>
+                            <option value="square">3D Pick-and-Place Square</option>
+                            <option value="wave">3D Sinusoidal Wave</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-label">
+                            <span>Motion Speed:</span>
+                            <span id="speedVal" class="mono">1.0x</span>
+                        </div>
+                        <input type="range" id="trajectorySpeed" min="0.2" max="3.0" step="0.1" value="1.0">
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+                        <button class="btn-primary" id="btnPlayTrajectory" style="flex: 1;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Play Trajectory
+                        </button>
+                        <button class="btn-secondary" id="btnStopTrajectory">
+                            Stop
+                        </button>
+                    </div>
+
+                    <div class="math-card" style="margin-top: 0.5rem;">
+                        The arm solves Inverse Kinematics at <strong>60 FPS</strong> to continuously trace the 3D parametric path with its robotic gripper.
+                    </div>
+                </div>
+
+                <!-- 4. MATHEMATICS & MATRIX PANEL -->
+                <div class="mode-panel hidden" id="panel-math">
+                    <div class="section-title">
+                        <span>3D Kinematics Formulations</span>
+                    </div>
+                    <div class="math-card">
+                        <div class="math-formula">
+Base Yaw: &theta;_1 = atan2(Z, X)
+Planar Radius: R = &radic;(X&sup2; + Z&sup2;)
+Height: Y = h_base + &Sigma; l_i &middot; sin(&Sigma; &theta;_k)
+X = R &middot; cos(&theta;_1),  Z = R &middot; sin(&theta;_1)
+                        </div>
+                        <p style="font-size: 0.78rem; color: var(--text-secondary);">
+                            The 3D articulated arm decouples azimuth (base yaw) and planar elevation kinematics, ensuring stable numerical solutions without singularity flip.
+                        </p>
+                    </div>
+
+                    <div class="section-title" style="margin-top: 0.5rem;">
+                        <span>Velocity Kinematics & Jacobian Matrix</span>
+                    </div>
+                    <div class="math-card">
+                        <div class="math-formula" id="jacobianMatrixOutput">
+J (2&times;4) =
+[ -y4, -(y4-y1), -(y4-y2), -(y4-y3) ]
+[  x4,  (x4-x1),  (x4-x2),  (x4-x3) ]
+                        </div>
+                        <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.4rem;">
+                            <strong>Yoshikawa Manipulability Measure:</strong><br>
+                            <code>w = &radic;det(J &middot; J^T)</code> represents the volume of the velocity ellipsoid.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 5. PYTHON CODE EXPORTER PANEL -->
+                <div class="mode-panel hidden" id="panel-code">
+                    <div class="section-title">
+                        <span>Generated Python Script</span>
+                        <div style="display: flex; gap: 0.35rem;">
+                            <button class="btn-secondary" id="btnCopyPython" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Copy</button>
+                            <button class="btn-secondary" id="btnDownloadPython" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Download .py</button>
+                        </div>
+                    </div>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary);">
+                        This Python script includes 3D and 2D Forward Kinematics, Inverse Kinematics, and Matplotlib 3D visualization:
+                    </p>
+                    <textarea class="code-area" id="pythonCodeOutput" readonly></textarea>
+                </div>
+
+            </div>
+        </aside>
+    </main>
+
+    <!-- Local Libraries (100% Offline Capable) -->
+    <script src="js/libs/three.min.js"></script>
+    <script src="js/libs/OrbitControls.js"></script>
+    <script src="js/libs/TransformControls.js"></script>
+    
+    <!-- Application Scripts -->
+    <script src="js/robot.js"></script>
+    <script src="js/canvas.js"></script>
+    <script src="js/robot3d.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
